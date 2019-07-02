@@ -1,12 +1,18 @@
 using LinearAlgebra
 
-vehicle_params = (m=100,
-             H=Diagonal([100, 100, 30]),
-             ms = 10,
+vehicle_params = (m=100.0,
+             H=Diagonal([100.0, 100.0, 30.0]),
+             ms = 10.0,
              ls = 0.5)
 
 
-function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params)
+function closed_loop!(ẋ::AbstractVector,x::AbstractVector,params,t)
+      u = zeros(19)
+
+      vehicle_dynamics!(ẋ, x, u, params,t)
+end
+
+function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params,t)
 
       # Parameters:
       m = params[:m] # vehicle mass
@@ -28,36 +34,36 @@ function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVect
 
       # Thruster force Jacobian
       Jf = [sin(ϕ)*cos(θ) -sin(θ) cos(ϕ)*cos(θ); #main engine, assuming gimbal rotation is about x followed by y
-            0 0 1; # +x quad
-            0 0 -1;
-            0 1 0;
-            0 -1 0;
-            0 0 1; # +y quad
-            0 0 -1;
-            1 0 0;
-            -1 0 0;
-            0 0 1; # -x quad
-            0 0 -1;
-            0 1 0;
-            0 -1 0;
-            0 0 1; # -y quad
-            0 0 -1;
-            1 0 0;
-            -1 0 0]';
+            0 0 1.0; # +x quad
+            0 0 -1.0;
+            0 1.0 0;
+            0 -1.0 0;
+            0 0 1.0; # +y quad
+            0 0 -1.0;
+            1.0 0 0;
+            -1.0 0 0;
+            0 0 1.0; # -x quad
+            0 0 -1.0;
+            0 1.0 0;
+            0 -1.0 0;
+            0 0 1.0; # -y quad
+            0 0 -1.0;
+            1.0 0 0;
+            -1.0 0 0]';
 
       # Thruster torque Jacobian
       #TODO: Get thruster locations from CAD model
       rme = [0; 0; -1.5]; #Vector from CoM to main engine
-      rxp = [1; 0; 0]; #Vector from CoM to +x quad
-      rxm = [-1; 0; 0]; #Vector from CoM to -x quad
-      ryp = [0; 1; 0]; #Vector from CoM to +y quad
-      rym = [0; -1; 0]; #Vector from CoM to -y quad
+      rxp = [1.0; 0; 0]; #Vector from CoM to +x quad
+      rxm = [-1.0; 0; 0]; #Vector from CoM to -x quad
+      ryp = [0; 1.0; 0]; #Vector from CoM to +y quad
+      rym = [0; -1.0; 0]; #Vector from CoM to -y quad
       Jτ = [hat(rme)*Jf[:,1] hat(rxp)*Jf[:,2:5] hat(ryp)*Jf[:,6:9] hat(rxm)*Jf[:,10:13] hat(rym)*Jf[:,14:17]];
 
       #Slosh mass stuff
       #TODO: Add spherical pendulum dynamics
       #TODO: Fit pendulum parameters from CFD model of fuel tank
-      Fs = [0; 0; 0]
+      Fs = [0.0; 0.0; 0.0]
 
       #Torques (body frame)
       τ = Jτ*t #Torques from all thrusters
@@ -87,10 +93,10 @@ end
 function qrot(q, x)
       s = q[1]
       v = q[2:4]
-      return x + 2*cross(v, cross(v,x) + s*x);
+      return x + 2.0*cross(v, cross(v,x) + s*x);
 end
 
 function gravity(r)
-      μ = 637800.0
+      μ = 398600.0
       Fg = -μ*r/(norm(r)^3) #Just spherical Earth for now
 end
