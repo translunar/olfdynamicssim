@@ -1,3 +1,5 @@
+using LinearAlgebra
+
 vehicle_params = (m=100,
              H=Diagonal([100, 100, 30]),
              ms = 10,
@@ -9,6 +11,7 @@ function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVect
       # Parameters:
       m = params[:m] # vehicle mass
       H = params[:H] # vehicle inertia matrix
+      ms = params[:ms]
 
       # State:
       r = x[1:3] #vehicle position (inertial frame)
@@ -52,7 +55,9 @@ function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVect
       Jτ = [hat(rme)*Jf[:,1] hat(rxp)*Jf[:,2:5] hat(ryp)*Jf[:,6:9] hat(rxm)*Jf[:,10:13] hat(rym)*Jf[:,14:17]];
 
       #Slosh mass stuff
-
+      #TODO: Add spherical pendulum dynamics
+      #TODO: Fit pendulum parameters from CFD model of fuel tank
+      Fs = [0; 0; 0]
 
       #Torques (body frame)
       τ = Jτ*t #Torques from all thrusters
@@ -68,8 +73,8 @@ function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVect
       ẋ[4] = -0.5*q[2:4]'*ω #Quaternion kinematics (scalar part)
       ẋ[5:7] = 0.5*(q[1]*ω + cross(q[2:4], ω)) #Quaternion kinematics (vector part)
       ẋ[8:10] = ṡ #Slosh mass velocity
-      ẋ[11:13] = F/m #Vehicle acceleration
-      ẋ[14:16] = H\(τ - cross(ω,J*ω)) #Vehicle angular acceleration
+      ẋ[11:13] = F/m + gravity(r) #Vehicle acceleration
+      ẋ[14:16] = H\(τ - cross(ω,H*ω)) #Vehicle angular acceleration
       ẋ[17:19] = Fs/ms #Slosh mass acceleration
 end
 
@@ -83,4 +88,9 @@ function qrot(q, x)
       s = q[1]
       v = q[2:4]
       return x + 2*cross(v, cross(v,x) + s*x);
+end
+
+function gravity(r)
+      μ = 637800.0
+      Fg = -μ*r/(norm(r)^3) #Just spherical Earth for now
 end
