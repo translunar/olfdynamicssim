@@ -3,19 +3,23 @@ using DifferentialEquations
 using Plots
 
 vehicle_params = (m=100.0,
-             J=Diagonal([100.0, 100.0, 30.0]),
+             J=[100.0 0 0; 0 100.0 0; 0 0 30.0],
+             p_slosh = [0; 0; -0.2], #vector from spacecraft COM to pivot point (body frame)
              m_slosh = 10.0,
-             l_slosh = 0.5)
+             l_slosh = 0.1)
 
-function test()
+function test(params)
+      p = params[:p_slosh] # slosh pivot point
+      l = params[:l_slosh]
+
       r0 = [0; 0; 0]
       q0 = [1.0; 0; 0; 0]
-      s0 = [0; 0; 0]
+      s0 = r0 + p - [0; 0; l]
       v0 = [0; 0; 0]
       ω0 = [0; 0; 0]
-      ṡ0 = [0; 0; 0]
+      ṡ0 = v0
       x0 = [r0; q0; s0; v0; ω0; ṡ0]
-      prob = ODEProblem(open_loop!, x0, (0.0, 60.0), vehicle_params)
+      prob = ODEProblem(open_loop!, x0, (0.0, 20.0), vehicle_params)
       soln = solve(prob)
       plot(soln)
 end
@@ -86,20 +90,30 @@ function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVect
       # Parameters:
       m = params[:m] # vehicle mass
       J = params[:J] # vehicle inertia matrix
-      m_slosh = params[:m_slosh] # slosh mass
+      p_s = params[:p_slosh] # slosh pivot point
+      m_s = params[:m_slosh] # slosh mass
+      l_s = params[:l_slosh] # slosh pendulum length
+
+      # Mass matrix for entire model
+      M = [m*I zeros(3,6); zeros(3,3) J zeros(3,3); zeros(3,6) m_s*I]
+      Minv = inv(M)
 
       # State:
       r = x[1:3] #vehicle position (inertial frame)
       q = x[4:7]/norm(x[4:7]) #quaternion (body to inertial, scalar first)
-      s = x[8:10]/norm(x[8:10]) #slosh mass position vector (body frame)
+      s = x[8:10] #slosh mass position vector (inertial frame)
       ṙ = x[11:13] #vehicle velocity (inertial frame)
       ω = x[14:16] #vehicle angular velocity (body frame)
-      ṡ = x[17:19] #slosh mass velocity vector (body frame)
+      ṡ = x[17:19] #slosh mass velocity vector (inertial frame)
 
       # Inputs:
       θ = u[1] #main engine gimbal angle about body x-axis
       ϕ = u[2] #main engine gimbal angle about body y-axis
       t = u[3:19] #thruster forces (main engine first)
+
+      # Some rotation stuff we're going to use a lot
+      R = qtoR(q) #convert quaternion to rotation matrix
+      ω̂ = hat(ω) #skew-symmetric cross product matrix
 
       # Thruster force Jacobian
       Bf = [sin(ϕ)*cos(θ) -sin(θ) cos(ϕ)*cos(θ); #main engine, assuming gimbal rotation is about x followed by y
@@ -129,28 +143,37 @@ function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVect
       rym = [0; -1.0; 0]; #Vector from CoM to -y quad
       Bτ = [hat(rme)*Bf[:,1] hat(rxp)*Bf[:,2:5] hat(ryp)*Bf[:,6:9] hat(rxm)*Bf[:,10:13] hat(rym)*Bf[:,14:17]];
 
-      #Slosh mass stuff
-      #TODO: Add spherical pendulum dynamics
-      #TODO: Fit pendulum parameters from CFD model of fuel tank
-      Fs = [0.0; 0.0; 0.0]
-
       #Torques (body frame)
-      τ = Bτ*t #Torques from all thrusters
+      τ = Bτ*t - cross(ω,J*ω) #Torques from all thrusters + gyroscopic term
 
-      #Forces (body frame)
-      Fb = Bf*t #Forces from all thrusters
+      #Forces (inertial frame)
+      F = R*Bf*t + m*gravity(r,t) #Forces from all thrusters + gravity
 
-      #Rotate forces into inertial frame
-      F = qrot(q,Fb)
+      #Fuel slosh pendulum stuff
+      k = 10 # Constraint stabilization gain
+
+      y = r + R*p_s - s #mass to pivot point vector (inertial frame)
+      ẏ = ṙ + R*ω̂*p_s - ṡ
+
+      ϕ = y'*y - l_s*l_s; #constraint
+      ϕ̇ = 2*y'*ẏ; #derivative of constraint
+
+      c = ẏ'*ẏ + y'*R*ω̂*ω̂*p_s
+      G = [y' -y'*R*hat(p_s) -y']
+
+      Fs = [0.0; 0.0; 0.0] #TODO: apply gravity to pendulum
+
+      λ = -(G*Minv*G')\(G*Minv*[F; τ; Fs] + c + k*k*ϕ + 2*k*ϕ̇);
 
       # Output:
       ẋ[1:3] = ṙ #Vehicle velocity
       ẋ[4] = -0.5*q[2:4]'*ω #Quaternion kinematics (scalar part)
       ẋ[5:7] = 0.5*(q[1]*ω + cross(q[2:4], ω)) #Quaternion kinematics (vector part)
       ẋ[8:10] = ṡ #Slosh mass velocity
-      ẋ[11:13] = F/m + gravity(r,t) #Vehicle acceleration
-      ẋ[14:16] = J\(τ - cross(ω,J*ω)) #Vehicle angular acceleration
-      ẋ[17:19] = Fs/m_slosh #Slosh mass acceleration
+      ẋ[11:19] = Minv*(G'*λ + [F; τ; Fs]) #Accelerations
+      # ẋ[11:13] = F/m #Vehicle acceleration
+      # ẋ[14:16] = J\τ #Vehicle angular acceleration
+      # ẋ[17:19] = Fs/m_slosh #Slosh mass acceleration
 end
 
 function hat(x)
@@ -159,10 +182,10 @@ function hat(x)
             -x[2] x[1]  0];
 end
 
-function qrot(q, x)
+function qtoR(q)
       s = q[1]
       v = q[2:4]
-      return x + 2.0*cross(v, cross(v,x) + s*x);
+      R = I + 2.0*hat(v)*(s*I + hat(v))
 end
 
 function gravity(r,t)
