@@ -1,6 +1,7 @@
 using LinearAlgebra
 using DifferentialEquations
 using Plots
+using SatelliteToolbox
 
 vehicle_params = (m=100.0,
              J=[100.0 0 0; 0 100.0 0; 0 0 30.0],
@@ -88,6 +89,7 @@ end
 function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params,t)
 
       # Parameters:
+      #TODO: Add thruster geometry to params struct
       m = params[:m] # vehicle mass
       J = params[:J] # vehicle inertia matrix
       p_s = params[:p_slosh] # slosh pivot point
@@ -189,11 +191,11 @@ function qtoR(q)
 end
 
 function gravity(r,t)
-      #μ_e = 398600.0
-      #Fg = -μ_e*r/(norm(r)^3) #Just spherical Earth for now
-      Fg = [0.0; 0.0; 0.0]
-      #J2 =
-      #μ_m =
-      #r_m =
-      #Fg += -μ_m*(r-r_m)/(norm(r-r_m)^3)
+      μ_e = 398600.435436 #Earth GM (km^3/s^2)
+      μ_m = 4902.800066 #Moon GM (km^3/s^2)
+
+      g_e = -μ_e*r/(norm(r)^3) #Just spherical Earth for now
+
+      #TODO: Add lunar gravity and higher-order gravity terms
+      #TODO: Use JPL DE files?
 end
