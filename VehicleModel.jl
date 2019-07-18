@@ -1,7 +1,6 @@
 using LinearAlgebra
 using DifferentialEquations
 using Plots
-using SatelliteToolbox
 
 vehicle_params = (m=100.0,
              J=[100.0 0 0; 0 100.0 0; 0 0 30.0],
@@ -149,7 +148,7 @@ function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVect
       τ = Bτ*t - cross(ω,J*ω) #Torques from all thrusters + gyroscopic term
 
       #Forces (inertial frame)
-      F = R*Bf*t + m*gravity(r,t) #Forces from all thrusters + gravity
+      F = R*Bf*t #+ m*gravity(r,t) #Forces from all thrusters + gravity
 
       #Fuel slosh pendulum stuff
       k = 10 # Constraint stabilization gain
