@@ -2,13 +2,13 @@ using LinearAlgebra
 using DifferentialEquations
 using Plots
 
-vehicle_params = (m=100.0,
+vehicle_params = (m=100.0, #wet mass
              J=[100.0 0 0; 0 100.0 0; 0 0 30.0],
              p_slosh = [0; 0; -0.2], #vector from spacecraft COM to pivot point (body frame)
              m_slosh = 10.0,
              l_slosh = 0.1)
 
-function test(params)
+function tesseract_test(params)
       p = params[:p_slosh] # slosh pivot point
       l = params[:l_slosh]
 
@@ -24,7 +24,7 @@ function test(params)
       plot(soln)
 end
 
-function open_loop!(ẋ::AbstractVector,x::AbstractVector,params,t)
+function tesseract_open_loop!(ẋ,x,params,t)
       #Just a function to test open-loop inputs
 
       #No inputs
@@ -85,7 +85,7 @@ function open_loop!(ẋ::AbstractVector,x::AbstractVector,params,t)
       vehicle_dynamics!(ẋ, x, u_fx, params,t)
 end
 
-function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVector,params,t)
+function tesseract_vehicle_dynamics!(ẋ,x,u,params,t)
 
       # Parameters:
       #TODO: Add thruster geometry to params struct
@@ -143,6 +143,85 @@ function vehicle_dynamics!(ẋ::AbstractVector,x::AbstractVector,u::AbstractVect
       ryp = [0; 1.0; 0]; #Vector from CoM to +y quad
       rym = [0; -1.0; 0]; #Vector from CoM to -y quad
       Bτ = [hat(rme)*Bf[:,1] hat(rxp)*Bf[:,2:5] hat(ryp)*Bf[:,6:9] hat(rxm)*Bf[:,10:13] hat(rym)*Bf[:,14:17]];
+
+      #Torques (body frame)
+      τ = Bτ*t - cross(ω,J*ω) #Torques from all thrusters + gyroscopic term
+
+      #Forces (inertial frame)
+      F = R*Bf*t #+ m*gravity(r,t) #Forces from all thrusters + gravity
+
+      #Fuel slosh pendulum stuff
+      k = 10 # Constraint stabilization gain
+
+      y = r + R*p_s - s #mass to pivot point vector (inertial frame)
+      ẏ = ṙ + R*ω̂*p_s - ṡ
+
+      ϕ = y'*y - l_s*l_s; #constraint
+      ϕ̇ = 2*y'*ẏ; #derivative of constraint
+
+      c = ẏ'*ẏ + y'*R*ω̂*ω̂*p_s
+      G = [y' -y'*R*hat(p_s) -y']
+
+      Fs = [0.0; 0.0; 0.0] #TODO: apply gravity to pendulum
+
+      λ = -(G*Minv*G')\(G*Minv*[F; τ; Fs] + c + k*k*ϕ + 2*k*ϕ̇);
+
+      # Output:
+      ẋ[1:3] = ṙ #Vehicle velocity
+      ẋ[4] = -0.5*q[2:4]'*ω #Quaternion kinematics (scalar part)
+      ẋ[5:7] = 0.5*(q[1]*ω + cross(q[2:4], ω)) #Quaternion kinematics (vector part)
+      ẋ[8:10] = ṡ #Slosh mass velocity
+      ẋ[11:19] = Minv*(G'*λ + [F; τ; Fs]) #Accelerations
+      # ẋ[11:13] = F/m #Vehicle acceleration
+      # ẋ[14:16] = J\τ #Vehicle angular acceleration
+      # ẋ[17:19] = Fs/m_slosh #Slosh mass acceleration
+end
+
+function stellar_vehicle_dynamics!(ẋ,x,u,params,t)
+
+      # Parameters:
+      #TODO: Add thruster geometry to params struct
+      m = params[:m] # vehicle mass
+      J = params[:J] # vehicle inertia matrix
+      p_s = params[:p_slosh] # slosh pivot point
+      m_s = params[:m_slosh] # slosh mass
+      l_s = params[:l_slosh] # slosh pendulum length
+
+      # Mass matrix for entire model
+      M = [m*I zeros(3,6); zeros(3,3) J zeros(3,3); zeros(3,6) m_s*I]
+      Minv = inv(M)
+
+      # State:
+      r = x[1:3] #vehicle position (inertial frame)
+      q = x[4:7]/norm(x[4:7]) #quaternion (body to inertial, scalar first)
+      s = x[8:10] #slosh mass position vector (inertial frame)
+      ṙ = x[11:13] #vehicle velocity (inertial frame)
+      ω = x[14:16] #vehicle angular velocity (body frame)
+      ṡ = x[17:19] #slosh mass velocity vector (inertial frame)
+
+      # Inputs:
+      θ = u[1] #main engine gimbal angle about body x-axis
+      ϕ = u[2] #main engine gimbal angle about body y-axis
+      t = u[3:19] #thruster forces (main engine first)
+
+      # Some rotation stuff we're going to use a lot
+      R = qtoR(q) #convert quaternion to rotation matrix
+      ω̂ = hat(ω) #skew-symmetric cross product matrix
+
+      # Thruster force Jacobian
+      θ_t = 5.0*pi/180 # Thruster cant angle
+      Bf = [0 sin(θ_t) cos(θ_t);
+            0 sin(θ_t) cos(θ_t);
+            0 -sin(θ_t) cos(θ_t);
+            0 -sin(θ_t) cos(θ_t)]'
+
+      # Thruster torque Jacobian
+      #TODO: Get thruster locations from CAD model
+      rul = [-0.5; 0.5; -1.5]; #Vector from CoM to upper-left thruster
+      rur = [0.5; 0.5; -1.5]; #Vector from CoM to upper-right thruster
+      rlr = [0.5; -0.5; -1.5]; #Vector from CoM to lower-right thruster
+      rll = [-0.5; -0.5; -1.5]; #Vector from CoM to lower-left thruster
+      Bτ = [cross(rul,Bf[:,1]) cross(rur,Bf[:,2]) cross(rlr,Bf[:,3]) cross(rll,Bf[:,4])];
 
       #Torques (body frame)
       τ = Bτ*t - cross(ω,J*ω) #Torques from all thrusters + gyroscopic term
