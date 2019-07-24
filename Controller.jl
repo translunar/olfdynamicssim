@@ -7,11 +7,11 @@ function force_to_u(F)
 
     # Thruster force Jacobian
     Nu = 4
-    θ_t = 5.0*pi/180 # Thruster cant angle
-    Bf = [0 sin(θ_t) cos(θ_t);
-          0 sin(θ_t) cos(θ_t);
-          0 -sin(θ_t) cos(θ_t);
-          0 -sin(θ_t) cos(θ_t)]'
+    θ_t = 5.0*pi/180 # Thruster angle
+    Bf = [cos(θ_t) 0 -sin(θ_t);
+          cos(θ_t) 0 -sin(θ_t);
+          cos(θ_t) 0 sin(θ_t);
+          cos(θ_t) 0 sin(θ_t)]'
 
     #Set up and solve optimization problem
     u = Variable(Nu)
@@ -28,20 +28,20 @@ function torque_to_u(τ)
 
     # Thruster force Jacobian
     Nu = 4
-    θ_t = 5.0*pi/180 # Thruster cant angle
-    Bf = [0 sin(θ_t) cos(θ_t);
-          0 sin(θ_t) cos(θ_t);
-          0 -sin(θ_t) cos(θ_t);
-          0 -sin(θ_t) cos(θ_t)]'
+    θ_t = 5.0*pi/180 # Thruster angle
+    Bf = [cos(θ_t) 0 -sin(θ_t);
+          cos(θ_t) 0 -sin(θ_t);
+          cos(θ_t) 0 sin(θ_t);
+          cos(θ_t) 0 sin(θ_t)]'
 
     # Thruster torque Jacobian
     #TODO: Get thruster locations from CAD model
-    rul = [-0.5; 0.5; -1.5]; #Vector from CoM to upper-left thruster
-    rur = [0.5; 0.5; -1.5]; #Vector from CoM to upper-right thruster
-    rlr = [0.5; -0.5; -1.5]; #Vector from CoM to lower-right thruster
-    rll = [-0.5; -0.5; -1.5]; #Vector from CoM to lower-left thruster
+    rul = [-1.5; -0.5; -0.5]; #Vector from CoM to upper-left thruster
+    rur = [-1.5; 0.5; -0.5]; #Vector from CoM to upper-right thruster
+    rlr = [-1.5; 0.5; 0.5]; #Vector from CoM to lower-right thruster
+    rll = [-1.5; -0.5; 0.5]; #Vector from CoM to lower-left thruster
     Bτ = [cross(rul,Bf[:,1]) cross(rur,Bf[:,2]) cross(rlr,Bf[:,3]) cross(rll,Bf[:,4])];
-
+    
     #Set up and solve optimization problem
     u = Variable(Nu)
     e = ones(Nu)
