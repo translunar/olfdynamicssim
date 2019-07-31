@@ -1,4 +1,3 @@
-
 using LinearAlgebra
 using DifferentialEquations
 using Plots
@@ -10,7 +9,7 @@ vehicle_params = (m_dry=60.0, #dry mass (kg)
                   g0=9.80665, #Standard gravity used to define Isp (m/s^2)
                   Fmax=10.0, #Max thruster force (N)
                   r_tank=0.5, #fuel tank radius (m)
-                  τ_thrust=0.2 #minimum valve switching time (s)
+                  τ_thrust=.25 #minimum valve switching time (s)
                   )
 
 function test(params)
@@ -30,18 +29,20 @@ function closed_loop(params)
       m_fuel = params[:m_fuel]
       m0 = m_fuel
       r0 = [0; 0; 0] #initial position
-      q0 = [1.0; .1; 0; 0] #initial attitude
+      q0 = [1.0; .1; .1; .1] #initial attitude
       q0 = q0/norm(q0)
       v0 = [0; 0; 0] #initial velocity
       ω0 = [0; 0; 0] #initial angular rate
       x0 = [r0; q0; v0; ω0; m0]
 
+      A, qpprob = attitude_tracking_setup(x0, params)
       Fmax = params[:Fmax]
       h = params[:τ_thrust]
       tfinal = 30
       Nt = Int(tfinal/h)
       Nx = 14
       Nu = 4
+      thist = collect(h*(0:(Nt-1)))
       xhist = zeros(Nx,Nt)
       uhist = zeros(Nu,Nt)
       xhist[:,1] = x0
@@ -51,16 +52,17 @@ function closed_loop(params)
       ẋ3 = zeros(14)
       ẋ4 = zeros(14)
       for k = 1:(Nt-1)
-            δu = attitude_tracking(qref, xhist[:,k], params)
+            δu = attitude_tracking(qref, xhist[:,k], A, qpprob, params)
             uhist[:,k] = [Fmax;Fmax;Fmax;Fmax] - δu
             vehicle_dynamics!(ẋ1,xhist[:,k],uhist[:,k],params,0)
             vehicle_dynamics!(ẋ2,xhist[:,k]+(h/2)*ẋ1,uhist[:,k],params,0)
             vehicle_dynamics!(ẋ3,xhist[:,k]+(h/2)*ẋ2,uhist[:,k],params,0)
             vehicle_dynamics!(ẋ4,xhist[:,k]+h*ẋ3,uhist[:,k],params,0)
             xhist[:,k+1] = xhist[:,k] + (h/6)*(ẋ1 + 2*ẋ2 + 2*ẋ3 + ẋ4)
+            xhist[4:7,k+1] = xhist[4:7,k+1]/norm(xhist[4:7,k+1])
       end
 
-      return xhist, uhist
+      return xhist, uhist, thist
 end
 
 function open_loop!(ẋ,x,params,t)
