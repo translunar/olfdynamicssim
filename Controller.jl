@@ -1,7 +1,85 @@
 using LinearAlgebra
-using Convex, ECOS, SCS
+using SparseArrays
+using OSQP
+using ControlSystems
 
 function attitude_tracking(qref, x, params)
+
+      J_dry = params[:J_dry]
+      r_tank = params[:r_tank]
+      Fmax = params[:Fmax]
+
+      #Attitude tracking while staying as close to full thrust as possible
+      Nt = 10 #number of time steps for QP
+      h = params[:τ_thrust] #length of time step for QP
+      Nx = 6
+      Nu = 4
+
+      # State:
+      r = x[1:3] #vehicle position (inertial frame)
+      q = x[4:7]/norm(x[4:7]) #quaternion (body to inertial, scalar first)
+      ṙ = x[8:10] #vehicle velocity (inertial frame)
+      ω = x[11:13] #vehicle angular velocity (body frame)
+      m_fuel = x[14] #current fuel mass
+
+      #Total vehicle inertia assuming spherical fuel mass at COM
+      J = J_dry + (2*m_fuel*r_tank*r_tank/5)*I
+
+      #attitude error
+      qe = qmult(qconj(qref), q)
+      ϕ = 2*qe[2:4]
+
+      #Controller state
+      x0 = [ϕ; ω]
+
+      # Thruster force Jacobian
+      θ_t = 5.0*pi/180 # Thruster angle
+      Bf = [cos(θ_t) 0 -sin(θ_t);
+            cos(θ_t) 0 -sin(θ_t);
+            cos(θ_t) 0 sin(θ_t);
+            cos(θ_t) 0 sin(θ_t)]'
+
+      # Thruster torque Jacobian
+      #TODO: Get thruster locations from CAD model
+      rul = [-1.5; -0.5; -0.5]; #Vector from CoM to upper-left thruster
+      rur = [-1.5; 0.5; -0.5]; #Vector from CoM to upper-right thruster
+      rlr = [-1.5; 0.5; 0.5]; #Vector from CoM to lower-right thruster
+      rll = [-1.5; -0.5; 0.5]; #Vector from CoM to lower-left thruster
+      Bτ = [cross(rul,Bf[:,1]) cross(rur,Bf[:,2]) cross(rlr,Bf[:,3]) cross(rll,Bf[:,4])];
+
+      #Double-integrator dynamics
+      Ac = [zeros(3,3) I; zeros(3,6)]
+      Bc = [zeros(3,4); -J\Bτ] #Subtract thrust off of u0
+      ABd = exp(h*[Ac Bc; zeros(Nu, Nx+Nu)])
+      A = ABd[1:Nx, 1:Nx]
+      B = ABd[1:Nx, Nx.+(1:Nu)]
+
+      #Cost weights
+      Q = Diagonal([(1/.1)^2*ones(3); (1/.3)^2*ones(3)])
+      R = Diagonal((1/10)^2*ones(4))
+
+      #Calculate Infinite-Horizon Cost-to-go
+      S = sparse(dare(A,B,Q,R))
+      droptol!(S, 1e-6)
+
+      #Build sparse QP
+      H = sparse([kron(Diagonal(I,Nt-1),[R zeros(Nu,Nx); zeros(Nx,Nu) Q]) zeros((Nx+Nu)*(Nt-1), Nx+Nu); zeros(Nx+Nu,(Nx+Nu)*(Nt-1)) [R zeros(Nu,Nx); zeros(Nx,Nu) S]])
+      g = zeros(Nt*(Nx+Nu))
+      C = sparse([[B -I zeros(Nx,(Nt-1)*(Nu+Nx))]; zeros(Nx*(Nt-1),Nu) [kron(Diagonal(I,Nt-1), [A B]) zeros((Nt-1)*Nx,Nx)] + [zeros((Nt-1)*Nx,Nx) kron(Diagonal(I,Nt-1),[zeros(Nx,Nu) Diagonal(-I,Nx)])]])
+      d =[-A*x0; zeros(Nx*(Nt-1))]
+      U = kron(Diagonal(I,Nt), [I zeros(Nu,Nx)])
+      D = [C; U]
+      lb = [d; zeros(Nt*Nu)]
+      ub = [d; Fmax*ones(Nt*Nu)]
+
+      prob = OSQP.Model()
+      OSQP.setup!(prob; P=H, q=g, A=D, l=lb, u=ub)
+      results = OSQP.solve!(prob)
+
+      return U*results.x
+end
+
+function attitude_tracking_condensed(qref, x, params)
 
       J_dry = params[:J_dry]
       r_tank = params[:r_tank]
