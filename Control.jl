@@ -43,10 +43,10 @@ function attitude_tracking_setup(x, params)
       B = ABd[1:Nx, Nx.+(1:Nu)]
 
       #Cost weights
-      Q = Diagonal([(1/.1)^2*ones(3); (1/.2)^2*ones(3)])
-      Rlqr = Diagonal((1/10)^2*ones(4))
-      Rqp = Diagonal((1/100)^2*ones(4))
-      α = 0.01/(Nt*Nu)
+      Q = Diagonal([(1/(5*pi/180))^2*ones(3); (1/(10*pi/180))^2*ones(3)])
+      Rlqr = Diagonal((1/Fmax)^2*ones(4))
+      Rqp = Diagonal((0.1/Fmax)^2*ones(4))
+      α = 0.01/Fmax
 
       #Calculate Infinite-Horizon Cost-to-go
       S = sparse(dare(A,B,Q,Rlqr))
@@ -103,19 +103,6 @@ function attitude_tracking(qref, x, A, qpprob, params)
       δu = round.(results.x[1:4], digits=2)
 
       return δu
-end
-
-function qmult(q1,q2)
-      s1 = q1[1]
-      v1 = q1[2:4]
-      s2 = q2[1]
-      v2 = q2[2:4]
-
-      return [s1*s2 - v1'*v2; s1*v2 + s2*v1 + cross(v1,v2)]
-end
-
-function qconj(q)
-      return [q[1]; -q[2:4]]
 end
 
 function force_to_u(F)
