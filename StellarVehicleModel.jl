@@ -9,7 +9,7 @@ vehicle_params = (m_dry=60.0, #dry mass (kg)
                   r_tank=0.5, #fuel tank radius (m)
                   τ_thrust=.0625, #minimum valve switching time (s)
                   q_thrust=2 #number of quantization bits for thrusters
-                  )
+)
 
 function vehicle_dynamics!(ẋ,x,u,params,t)
 
