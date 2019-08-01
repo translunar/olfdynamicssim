@@ -9,7 +9,8 @@ vehicle_params = (m_dry=60.0, #dry mass (kg)
                   g0=9.80665, #Standard gravity used to define Isp (m/s^2)
                   Fmax=10.0, #Max thruster force (N)
                   r_tank=0.5, #fuel tank radius (m)
-                  τ_thrust=.25 #minimum valve switching time (s)
+                  τ_thrust=.0625, #minimum valve switching time (s)
+                  q_thrust=2 #number of quantization bits for thrusters
                   )
 
 function test(params)
@@ -29,7 +30,7 @@ function closed_loop(params)
       m_fuel = params[:m_fuel]
       m0 = m_fuel
       r0 = [0; 0; 0] #initial position
-      q0 = [1.0; .1; .1; .1] #initial attitude
+      q0 = [1.0; (10*pi/360)*randn(3)] #initial attitude
       q0 = q0/norm(q0)
       v0 = [0; 0; 0] #initial velocity
       ω0 = [0; 0; 0] #initial angular rate
@@ -37,7 +38,9 @@ function closed_loop(params)
 
       A, qpprob = attitude_tracking_setup(x0, params)
       Fmax = params[:Fmax]
-      h = params[:τ_thrust]
+      τ_thrust = params[:τ_thrust]
+      q_thrust = params[:q_thrust]
+      h = τ_thrust*(2^q_thrust)
       tfinal = 30
       Nt = Int(tfinal/h)
       Nx = 14
@@ -47,22 +50,41 @@ function closed_loop(params)
       uhist = zeros(Nu,Nt)
       xhist[:,1] = x0
       qref = [1.0;0;0;0]
+      for k = 1:(Nt-1)
+            δu = attitude_tracking(qref, xhist[:,k], A, qpprob, params)
+            u = [Fmax;Fmax;Fmax;Fmax] - δu
+            xhist[:,k+1], uhist[:,k] = quantized_rk_step(xhist[:,k],u,h,q_thrust,params)
+      end
+
+      return xhist, uhist, thist
+end
+
+function quantized_rk_step(x,u,h,q_thrust,params)
+      Fmax = params[:Fmax]
+
+      t_on = round.(u/Fmax,digits=q_thrust,base=2)
+      Nsteps = 2^q_thrust
+      step = (1/2)^q_thrust
+      xn = deepcopy(x)
+      for k = 1:Nsteps
+            xn = rk4_step(xn,Fmax*(t_on.>=(k*step)),h/Nsteps,params)
+      end
+
+      return xn, Fmax*t_on
+end
+
+function rk4_step(x,u,h,params)
       ẋ1 = zeros(14)
       ẋ2 = zeros(14)
       ẋ3 = zeros(14)
       ẋ4 = zeros(14)
-      for k = 1:(Nt-1)
-            δu = attitude_tracking(qref, xhist[:,k], A, qpprob, params)
-            uhist[:,k] = [Fmax;Fmax;Fmax;Fmax] - δu
-            vehicle_dynamics!(ẋ1,xhist[:,k],uhist[:,k],params,0)
-            vehicle_dynamics!(ẋ2,xhist[:,k]+(h/2)*ẋ1,uhist[:,k],params,0)
-            vehicle_dynamics!(ẋ3,xhist[:,k]+(h/2)*ẋ2,uhist[:,k],params,0)
-            vehicle_dynamics!(ẋ4,xhist[:,k]+h*ẋ3,uhist[:,k],params,0)
-            xhist[:,k+1] = xhist[:,k] + (h/6)*(ẋ1 + 2*ẋ2 + 2*ẋ3 + ẋ4)
-            xhist[4:7,k+1] = xhist[4:7,k+1]/norm(xhist[4:7,k+1])
-      end
-
-      return xhist, uhist, thist
+      vehicle_dynamics!(ẋ1,x,u,params,0)
+      vehicle_dynamics!(ẋ2,x+(h/2)*ẋ1,u,params,0)
+      vehicle_dynamics!(ẋ3,x+(h/2)*ẋ2,u,params,0)
+      vehicle_dynamics!(ẋ4,x+h*ẋ3,u,params,0)
+      xn = x + (h/6)*(ẋ1 + 2*ẋ2 + 2*ẋ3 + ẋ4)
+      xn[4:7] = xn[4:7]/norm(xn[4:7])
+      return xn
 end
 
 function open_loop!(ẋ,x,params,t)
