@@ -28,7 +28,7 @@ function state_prediction(x,u,P,Δt,params)
     R = qtoR(q) #rotation matrix (we'll use it a bunch)
 
     #Zero-order-hold update on state
-    rn = r + Δt*v + 0.5*Δt*R*(a-b)
+    rn = r + Δt*v
     qn = qmult(q,qexp(0.5*Δt*(ω-g)))
     vn = v + Δt*R*(a-b)
     xn = [rn;qn;vn;b;g]
@@ -56,5 +56,115 @@ function state_prediction(x,u,P,Δt,params)
 end
 
 function measurement_update(x,y,P,params)
+    #This would nominally contain things like star tracker and GPS updates
+end
 
+function debug_dynamics(x,u,Δt)
+    #Things in state vector
+    r = x[1:3] #ECI position
+    q = x[4:7]  #body -> ECI quaternion
+    v = x[8:10] #ECI velocity
+    b = x[11:13] #accelerometer bias
+    g = x[14:16] #gyro bias
+
+    #Things in input vector
+    a = u[1:3] #accelerometer measurement (body frame)
+    ω = u[4:6] #gyro measurement (body frame)
+
+    R = qtoR(q) #rotation matrix (we'll use it a bunch)
+
+    #Zero-order-hold update on state
+    rn = r + Δt*v
+    qn = qmult(q,qexp(0.5*Δt*(ω-g)))
+    vn = v + Δt*R*(a-b)
+    xn = [rn;qn;vn;b;g]
+
+    return xn
+end
+
+function debug_jacobians(x,u,Δt)
+    #Things in state vector
+    r = x[1:3] #ECI position
+    q = x[4:7]  #body -> ECI quaternion
+    v = x[8:10] #ECI velocity
+    b = x[11:13] #accelerometer bias
+    g = x[14:16] #gyro bias
+
+    #Things in input vector
+    a = u[1:3] #accelerometer measurement (body frame)
+    ω = u[4:6] #gyro measurement (body frame)
+
+    R = qtoR(q) #rotation matrix (we'll use it a bunch)
+
+    #Zero-order-hold update on state
+    rn = r + Δt*v
+    qn = qmult(q,qexp(0.5*Δt*(ω-g)))
+    vn = v + Δt*R*(a-b)
+    xn = [rn;qn;vn;b;g]
+
+    #Linearized covariance update
+    A = [I zeros(3,3) Δt*I zeros(3,6);
+         zeros(3,3) -0.5*I+0.25*Δt*hat(ω-g) zeros(3,6) 0.5*Δt*I+((0.5*Δt)^2)*hat(ω);
+         zeros(3,3) Δt*R*hat(b-a) I -Δt*R zeros(3,3);
+         zeros(6,9) I]
+    B = [zeros(3,6);
+         zeros(3,3) Δt*I;
+         Δt*R zeros(3,3);
+         zeros(6,6)]
+
+    return A, B
+end
+
+function random_estimator_state()
+    r = randn(3)
+    q = [1.0; (10*pi/360)*randn(3)]
+    q = q/norm(q)
+    v = randn(3)
+    b = randn(3)
+    g = randn(3)
+    x = [r;q;v;b;g]
+
+    a = randn(3)
+    ω = randn(3)
+    u = [a;ω]
+
+    return x, u
+end
+
+function finite_diff_check(x,u,Δt)
+
+    A1, B1 = debug_jacobians(x,u,Δt)
+
+    Δx = Diagonal(5e-6*ones(15))
+    Δu = Diagonal(5e-6*ones(6))
+    A = zeros(15,15)
+    B = zeros(15,6)
+
+    for k = 1:15
+        xp = debug_dynamics(state_add(x, Δx[:,k]), u, Δt)
+        xm = debug_dynamics(state_add(x, -Δx[:,k]), u, Δt)
+        A[:,k] = state_diff(xp,xm)/(2*Δx[k,k])
+    end
+
+    for k = 1:6
+        xp = debug_dynamics(x, u + Δu[:,k], Δt)
+        xm = debug_dynamics(x, u - Δu[:,k], Δt)
+        B[:,k] = state_diff(xp,xm)/(2*Δu[k,k])
+    end
+
+    return A,B,A1,B1
+end
+
+function state_diff(x1,x2)
+    q1 = x1[4:7]
+    q2 = x2[4:7]
+    dq = qmult(qconj(q1),q2)
+    phi = 2*dq[2:4]
+    return [x1[1:3]-x2[1:3]; phi; x1[8:16]-x2[8:16]]
+end
+
+function state_add(x,δ)
+    q = x[4:7]
+    qp = qmult(q,qexp(0.5*δ[4:6]))
+    return [x[1:3]+δ[1:3]; qp; x[8:16]+δ[7:15]]
 end
