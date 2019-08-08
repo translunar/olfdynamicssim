@@ -13,6 +13,12 @@ function qtoR(q)
       R = I + 2.0*hat(v)*(s*I + hat(v))
 end
 
+function qrot(q,r)
+      s = q[1]
+      v = q[2:4]
+      return r + 2.0*cross(v,(s*r + cross(v,r)))
+end
+
 function qmult(q1,q2)
       s1 = q1[1]
       v1 = q1[2:4]
@@ -22,8 +28,25 @@ function qmult(q1,q2)
       return [s1*s2 - v1'*v2; s1*v2 + s2*v1 + cross(v1,v2)]
 end
 
+function L(q)
+      s = q[1]
+      v = q[2:4]
+      return [s -v'; v s*I + hat(v)]
+end
+
+function R(q)
+      s = q[1]
+      v = q[2:4]
+      return [s -v'; v s*I - hat(v)]
+end
+
 function qconj(q)
       return [q[1]; -q[2:4]]
+end
+
+function qexp(ϕ)
+      mag = norm(ϕ)
+      return [cos(mag/2); 0.5*ϕ*sinc(mag/2)]
 end
 
 function gravity(r,t)
