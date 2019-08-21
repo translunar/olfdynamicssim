@@ -44,9 +44,20 @@ function qconj(q)
       return [q[1]; -q[2:4]]
 end
 
-function qexp(ϕ)
+function expq(ϕ)
       mag = norm(ϕ)
       return [cos(mag/2); 0.5*ϕ*sinc(mag/(2*pi))]
+end
+
+function logq(q)
+      θ = atan(norm(q[2:4]),q[1])
+      if θ < 1e-5 #Handle the case when θ is small
+            ϕ = (q[2:4]/q[1])*(1-(norm(q[2:4])^2)/(3*q[1]*q[1]))
+      else
+            ϕ = θ*q[2:4]/norm(q[2:4])
+      end
+
+      return 2*ϕ
 end
 
 function gravity(r,t)

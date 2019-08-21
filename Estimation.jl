@@ -29,7 +29,7 @@ function state_prediction(x,u,P,Δt,params)
 
     #Zero-order-hold update on state
     rn = r + Δt*v
-    qn = qmult(q,qexp(0.5*Δt*(ω-g)))
+    qn = qmult(q,expq(Δt*(ω-g)))
     vn = v + Δt*R*(a-b)
     xn = [rn;qn;vn;b;g]
 
@@ -75,7 +75,7 @@ function debug_dynamics(x,u,Δt)
 
     #Zero-order-hold update on state
     rn = r + Δt*v
-    qn = qmult(q,qexp(0.5*Δt*(ω-g)))
+    qn = qmult(q,expq(Δt*(ω-g)))
     vn = v + Δt*R*(a-b)
     xn = [rn;qn;vn;b;g]
 
@@ -98,13 +98,13 @@ function debug_jacobians(x,u,Δt)
 
     #Zero-order-hold update on state
     rn = r + Δt*v
-    qn = qmult(q,qexp(0.5*Δt*(ω-g)))
+    qn = qmult(q,expq(Δt*(ω-g)))
     vn = v + Δt*R*(a-b)
     xn = [rn;qn;vn;b;g]
 
     #Linearized covariance update
     A = [I zeros(3,3) Δt*I zeros(3,6);
-         zeros(3,3) -0.5*I+0.25*Δt*hat(ω-g) zeros(3,6) 0.5*Δt*I+((0.5*Δt)^2)*hat(ω);
+         zeros(3,3) -I+Δt*hat(ω-g) zeros(3,6) Δt*I+((Δt^2)/2)*hat(ω);
          zeros(3,3) Δt*R*hat(b-a) I -Δt*R zeros(3,3);
          zeros(6,9) I]
     B = [zeros(3,6);
@@ -159,12 +159,12 @@ function state_diff(x1,x2)
     q1 = x1[4:7]
     q2 = x2[4:7]
     dq = qmult(qconj(q1),q2)
-    phi = 2*dq[2:4]
+    phi = logq(dq)
     return [x1[1:3]-x2[1:3]; phi; x1[8:16]-x2[8:16]]
 end
 
 function state_add(x,δ)
     q = x[4:7]
-    qp = qmult(q,qexp(0.5*δ[4:6]))
+    qp = qmult(q,expq(δ[4:6]))
     return [x[1:3]+δ[1:3]; qp; x[8:16]+δ[7:15]]
 end
