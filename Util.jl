@@ -46,7 +46,7 @@ end
 
 function qexp(ϕ)
       mag = norm(ϕ)
-      return [cos(mag/2); 0.5*ϕ*sinc(mag/2)]
+      return [cos(mag/2); 0.5*ϕ*sinc(mag/(2*pi))]
 end
 
 function gravity(r,t)
