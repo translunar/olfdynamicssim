@@ -60,6 +60,22 @@ function logq(q)
       return 2*ϕ
 end
 
+function expso3(ϕ)
+      θ = norm(ϕ)
+      if θ < 1e-5
+            Φ = hat(ϕ)
+            Φ2 = Φ*Φ
+            Φ3 = Φ2*Φ
+            Φ4 = Φ3*Φ
+            R = I + Φ + 0.5*Φ2 + (1.0/6.0)*Φ3 + (1.0/24.0)*Φ4
+      else
+            C = hat(ϕ/θ)
+            R = I + sin(θ)*C + (1-cos(θ))*C*C
+      end
+
+      return R
+end
+
 function gravity(r,t)
       μ_e = 398600.435436 #Earth GM (km^3/s^2)
       μ_m = 4902.800066 #Moon GM (km^3/s^2)
