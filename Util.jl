@@ -60,7 +60,7 @@ function logq(q)
       return 2*ϕ
 end
 
-function expso3(ϕ)
+function Expso3(ϕ)
       θ = norm(ϕ)
       if θ < 1e-5
             Φ = hat(ϕ)
@@ -74,6 +74,13 @@ function expso3(ϕ)
       end
 
       return R
+end
+
+function dExpso3(ϕ)
+      θ = norm(ϕ)
+      Φ = hat(ϕ)
+
+      J = I - ((1-cos(θ))/(θ*θ))*Φ + ((θ - sin(θ))/(θ*θ*θ))*(Φ*Φ)
 end
 
 function gravity(r,t)

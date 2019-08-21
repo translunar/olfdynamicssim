@@ -104,11 +104,11 @@ function debug_jacobians(x,u,Δt)
 
     #Linearized covariance update
     A = [I zeros(3,3) Δt*I zeros(3,6);
-         zeros(3,3) expso3(Δt*(ω-g))' zeros(3,6) Δt*I+((Δt^2)/2)*hat(ω);
+         zeros(3,3) Expso3(Δt*(ω-g))' zeros(3,6) -Δt*dExpso3(Δt*(ω-g));
          zeros(3,3) Δt*R*hat(b-a) I -Δt*R zeros(3,3);
          zeros(6,9) I]
     B = [zeros(3,6);
-         zeros(3,3) Δt*I;
+         zeros(3,3) Δt*dExpso3(Δt*(ω-g));
          Δt*R zeros(3,3);
          zeros(6,6)]
 
@@ -135,8 +135,8 @@ function finite_diff_check(x,u,Δt)
 
     A1, B1 = debug_jacobians(x,u,Δt)
 
-    Δx = Diagonal(5e-5*ones(15))
-    Δu = Diagonal(5e-5*ones(6))
+    Δx = Diagonal(5e-6*ones(15))
+    Δu = Diagonal(5e-6*ones(6))
     A = zeros(15,15)
     B = zeros(15,6)
 
