@@ -6,13 +6,23 @@ estimator_params = (angle_random_walk = 0.06, #in deg/sqrt(hour)
                     accel_bias_instability = 6 #in microG
 )
 
-function imu_model(x,params)
+function propagate_state(x0,P0,Δt,tfinal,params)
+    N = Int(ceil(tfinal/Δt)+1)
+    xhist = zeros(16,N)
+    Phist = zeros(15,15,N)
+    xhist[:,1] = x0
+    Phist[:,:,1] = P0
+    for k = 1:(N-1)
+        u = 0.01*randn(6)
+        xhist[:,k+1], Phist[:,:,k+1] = single_step_prediction(xhist[:,k],u,Phist[:,:,k],Δt,params)
+    end
 
+    return xhist, Phist
 end
 
-function state_prediction(x,u,P,Δt,params)
-    #Note that this function assumes Δt is pretty small relative
-    #to the vehicle dynamics (e.g. ≈100Hz IMU update rate)
+function single_step_prediction(x,u,P,Δt,params)
+    #This function does a single-time-step update to the state and covariance
+    #using dead-reckoning (propagating with the IMU with a zero-order hold).
 
     #Things in state vector
     r = x[1:3] #ECI position
@@ -37,17 +47,17 @@ function state_prediction(x,u,P,Δt,params)
     Qaa = ((params[:velocity_random_walk])^2)/3600
     Qωω = ((params[:angle_random_walk]*(pi/180))^2)/3600
     Quu = Diagonal([Qaa*ones(3); Qωω*ones(3)])
-    Qbb = ((params[:accel_bias_instability])^2)/(3600^3)
+    Qbb = ((params[:accel_bias_instability]*(9.80665/1e6))^2)/(3600^3)
     Qgg = ((params[:gyro_bias_instability]*(pi/180))^2)/(3600^3)
     Qxx = Diagonal([zeros(9); Qbb*ones(3); Qgg*ones(3)])
 
     #Linearized covariance update
     A = [I zeros(3,3) Δt*I zeros(3,6);
-         zeros(3,3) I-Δt*hat(ω-g) zeros(3,6) Δt*I+((Δt^2)/2)*hat(ω);
+         zeros(3,3) Expso3(Δt*(ω-g))' zeros(3,6) -Δt*dExpso3(Δt*(ω-g));
          zeros(3,3) Δt*R*hat(b-a) I -Δt*R zeros(3,3);
          zeros(6,9) I]
     B = [zeros(3,6);
-         zeros(3,3) Δt*I;
+         zeros(3,3) Δt*dExpso3(Δt*(ω-g));
          Δt*R zeros(3,3);
          zeros(6,6)]
     Pn = A*P*A' + B*Quu*B' + Δt*Qxx
