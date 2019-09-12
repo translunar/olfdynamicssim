@@ -4,6 +4,8 @@ using OSQP
 using ControlSystems
 
 function attitude_tracking_setup(x, params)
+      #TODO: Try L1 cost on u and x w/quadratic cost-to-go to minimize thruster-off pulsing
+      #TODO: Calculate "effective ISP" based on reasonable errors
       J_dry = params[:J_dry]
       r_tank = params[:r_tank]
       Fmax = params[:Fmax]
