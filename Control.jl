@@ -9,6 +9,12 @@ function attitude_tracking_setup(x, params)
       J_dry = params[:J_dry]
       r_tank = params[:r_tank]
       Fmax = params[:Fmax]
+      Fmin = params[:Fmin]
+      if Fmax != Fmin
+            ΔF = Fmax-Fmin
+      else
+            ΔF = Fmax
+      end
 
       #Attitude tracking while staying as close to full thrust as possible
       Nt = 10 #number of time steps for QP
@@ -62,7 +68,7 @@ function attitude_tracking_setup(x, params)
       d =zeros(Nx*Nt)
       D = [C; U]
       lb = [d; zeros(Nt*Nu)]
-      ub = [d; Fmax*ones(Nt*Nu)]
+      ub = [d; ΔF*ones(Nt*Nu)]
 
       prob = OSQP.Model()
       OSQP.setup!(prob; P=H, q=g, A=D, l=lb, u=ub, verbose=false)
@@ -80,6 +86,12 @@ function attitude_tracking(qref, x, A, qpprob, params)
       Nx = 6
       Nu = 4
       Fmax = params[:Fmax]
+      Fmin = params[:Fmin]
+      if Fmax != Fmin
+            ΔF = Fmax-Fmin
+      else
+            ΔF = Fmax
+      end
 
       # State:
       r = x[1:3] #vehicle position (inertial frame)
@@ -98,7 +110,7 @@ function attitude_tracking(qref, x, A, qpprob, params)
       #Update QP parameters
       d =[-A*x0; zeros(Nx*(Nt-1))]
       lb = [d; zeros(Nt*Nu)]
-      ub = [d; Fmax*ones(Nt*Nu)]
+      ub = [d; ΔF*ones(Nt*Nu)]
       OSQP.update!(qpprob, l=lb, u=ub)
 
       results = OSQP.solve!(qpprob)

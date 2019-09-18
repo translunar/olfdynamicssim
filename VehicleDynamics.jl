@@ -8,6 +8,8 @@ stellar_params = (m_dry=60.0, #dry mass (kg)
                   Fmax=11.0, #Max thruster force (N)
                   Fmin=9.0, #Min thruster force (N)
                   r_tank=0.5, #fuel tank radius (m)
+                  τ_thrust=.05, #minimum valve switching time (s)
+                  q_thrust=2 #number of quantization bits for thrusters
 )
 
 tesseract_params = (m_dry=60.0, #dry mass (kg)

@@ -13,6 +13,7 @@ function closed_loop(params)
 
       A, qpprob = attitude_tracking_setup(x0, params)
       Fmax = params[:Fmax]
+      Fmin = params[:Fmin]
       τ_thrust = params[:τ_thrust]
       q_thrust = params[:q_thrust]
       h = τ_thrust*(2^q_thrust)
@@ -28,7 +29,12 @@ function closed_loop(params)
       for k = 1:(Nt-1)
             δu = attitude_tracking(qref, xhist[:,k], A, qpprob, params)
             u = [Fmax;Fmax;Fmax;Fmax] - δu
-            xhist[:,k+1], uhist[:,k] = quantized_rk_step(xhist[:,k],u,h,q_thrust,params)
+            if all(u .>= Fmin)
+                  uhist[:,k] = u
+                  xhist[:,k+1] = rk4_step(xhist[:,k],u,h,params)
+            else
+                  xhist[:,k+1], uhist[:,k] = quantized_rk_step(xhist[:,k],u,h,q_thrust,params)
+            end
       end
 
       return xhist, uhist, thist
