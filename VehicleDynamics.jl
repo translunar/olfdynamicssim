@@ -91,3 +91,12 @@ function vehicle_dynamics!(ẋ,x,u,params,t)
       ẋ[11:13] = J\τ #Vehicle angular acceleration
       ẋ[14] = -sum(u)/(g0*Isp) #Fuel use
 end
+
+function thruster_efficiency(τ_ms)
+      #Thruster efficiency factor as a function of pulse on-time in milliseconds
+      a = 0.639
+      b = 0.0609
+      c = 0.000684
+      e = a.*atan.(b.*(τ_ms.-c)) #efficiency factor (<1)
+      e = min.(max.(e, 0.0), 1.0) #clamp between 0 and 1
+end

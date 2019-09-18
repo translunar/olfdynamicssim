@@ -119,6 +119,36 @@ function attitude_tracking(qref, x, A, qpprob, params)
       return δu
 end
 
+function effective_Isp(thist, uhist, params)
+      #Calculates effective ISP for a pulsed thruster trajectory
+      Fmax = params[:Fmax]
+      Isp = params[:Isp]
+      τ_thrust = params[:τ_thrust]*1000 #put time in ms
+      q_thrust = params[:q_thrust]
+      h = τ_thrust*(2^q_thrust)
+      e = zeros(size(u,1))
+      for i = 1:size(uhist,1)
+            t_last = 0.0
+            t_on = 0.0
+            for k = 1:length(thist)
+                  on = uhist[i,k]/Fmax
+                  if on == 1.0
+                        t_on += h
+                  elseif on == 0.0
+                        #do nothing
+                  else
+                        t_total = t_on + h
+                        t_on += on*h
+                        e[i] = (t_total*thruster_efficiency(t_on) + t_last*e[i])/(t_last+t_total)
+                        t_on = 0.0
+                        t_last += t_total
+                  end
+            end
+      end
+      e_avg = sum(e)/length(e)
+      return Isp*e_avg, e_avg
+end
+
 function force_to_u(F)
     #Converts a torque to a thruster command
     #Assuming 4-thruster setup
