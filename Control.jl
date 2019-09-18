@@ -17,7 +17,7 @@ function attitude_tracking_setup(x, params)
       end
 
       #Attitude tracking while staying as close to full thrust as possible
-      Nt = 10 #number of time steps for QP
+      Nt = 25 #number of time steps for QP
       τ_thrust = params[:τ_thrust]
       q_thrust = params[:q_thrust]
       h = τ_thrust*(2^q_thrust)
@@ -68,7 +68,7 @@ function attitude_tracking_setup(x, params)
       d =zeros(Nx*Nt)
       D = [C; U]
       lb = [d; zeros(Nt*Nu)]
-      ub = [d; ΔF*ones(Nt*Nu)]
+      ub = [d; Fmax*ones(Nt*Nu)]
 
       prob = OSQP.Model()
       OSQP.setup!(prob; P=H, q=g, A=D, l=lb, u=ub, verbose=false)
@@ -79,7 +79,7 @@ end
 function attitude_tracking(qref, x, A, qpprob, params)
 
       #Attitude tracking while staying as close to full thrust as possible
-      Nt = 10 #number of time steps for QP
+      Nt = 25 #number of time steps for QP
       τ_thrust = params[:τ_thrust]
       q_thrust = params[:q_thrust]
       h = τ_thrust*(2^q_thrust)
@@ -110,7 +110,7 @@ function attitude_tracking(qref, x, A, qpprob, params)
       #Update QP parameters
       d =[-A*x0; zeros(Nx*(Nt-1))]
       lb = [d; zeros(Nt*Nu)]
-      ub = [d; ΔF*ones(Nt*Nu)]
+      ub = [d; Fmax*ones(Nt*Nu)]
       OSQP.update!(qpprob, l=lb, u=ub)
 
       results = OSQP.solve!(qpprob)

@@ -9,7 +9,8 @@ stellar_params = (m_dry=60.0, #dry mass (kg)
                   Fmin=9.0, #Min thruster force (N)
                   r_tank=0.5, #fuel tank radius (m)
                   τ_thrust=.05, #minimum valve switching time (s)
-                  q_thrust=2 #number of quantization bits for thrusters
+                  q_thrust=2, #number of quantization bits for thrusters
+                  cg_offset=[0.01; 0.02; -0.02] #offset to CG (vs nominal)
 )
 
 tesseract_params = (m_dry=60.0, #dry mass (kg)
@@ -21,7 +22,8 @@ tesseract_params = (m_dry=60.0, #dry mass (kg)
                   Fmin=22.0, #Min thruster force (N)
                   r_tank=0.5, #fuel tank radius (m)
                   τ_thrust=.05, #minimum valve switching time (s)
-                  q_thrust=2 #number of quantization bits for thrusters
+                  q_thrust=2, #number of quantization bits for thrusters
+                  cg_offset=[0.01; 0.02; -0.02] #offset to CG (vs nominal)
 )
 
 function vehicle_dynamics!(ẋ,x,u,params,t)
@@ -33,6 +35,7 @@ function vehicle_dynamics!(ẋ,x,u,params,t)
       Isp = params[:Isp]
       g0 = params[:g0]
       r_tank = params[:r_tank]
+      cg_offset = params[:cg_offset]
 
       # State:
       r = x[1:3] #vehicle position (inertial frame)
@@ -72,7 +75,7 @@ function vehicle_dynamics!(ẋ,x,u,params,t)
       rur = [-1.5; 0.5; -0.5]; #Vector from CoM to upper-right thruster
       rlr = [-1.5; 0.5; 0.5]; #Vector from CoM to lower-right thruster
       rll = [-1.5; -0.5; 0.5]; #Vector from CoM to lower-left thruster
-      Bτ = [cross(rul,Bf[:,1]) cross(rur,Bf[:,2]) cross(rlr,Bf[:,3]) cross(rll,Bf[:,4])];
+      Bτ = [cross((rul+cg_offset),Bf[:,1]) cross((rur+cg_offset),Bf[:,2]) cross((rlr+cg_offset),Bf[:,3]) cross((rll+cg_offset),Bf[:,4])];
 
       #Torques (body frame)
       τ = Bτ*u - cross(ω,J*ω) #Torques from all thrusters + gyroscopic term
