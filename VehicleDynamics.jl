@@ -1,13 +1,24 @@
 using LinearAlgebra
 
-vehicle_params = (m_dry=60.0, #dry mass (kg)
+stellar_params = (m_dry=60.0, #dry mass (kg)
                   m_fuel=48.0, #fuel mass (kg)
                   J_dry=[10.0 0 0; 0 30.0 0; 0 0 30.0], #dry inertia (kg*m^2)
                   Isp=285.0, #Isp (s)
                   g0=9.80665, #Standard gravity used to define Isp (m/s^2)
-                  Fmax=10.0, #Max thruster force (N)
+                  Fmax=11.0, #Max thruster force (N)
+                  Fmin=9.0, #Min thruster force (N)
                   r_tank=0.5, #fuel tank radius (m)
-                  τ_thrust=.0625, #minimum valve switching time (s)
+)
+
+tesseract_params = (m_dry=60.0, #dry mass (kg)
+                  m_fuel=48.0, #fuel mass (kg)
+                  J_dry=[10.0 0 0; 0 30.0 0; 0 0 30.0], #dry inertia (kg*m^2)
+                  Isp=285.0, #Isp (s)
+                  g0=9.80665, #Standard gravity used to define Isp (m/s^2)
+                  Fmax=22.0, #Max thruster force (N)
+                  Fmin=22.0, #Min thruster force (N)
+                  r_tank=0.5, #fuel tank radius (m)
+                  τ_thrust=.05, #minimum valve switching time (s)
                   q_thrust=2 #number of quantization bits for thrusters
 )
 
@@ -28,12 +39,13 @@ function vehicle_dynamics!(ẋ,x,u,params,t)
       ω = x[11:13] #vehicle angular velocity (body frame)
       m_fuel = x[14] #current fuel mass
 
-      #Clip inputs (no negative thrust or fuel allowed)
+      #Clip inputs
       m_fuel = max(m_fuel, 0.0)
       if m_fuel == 0.0
-            u = zeros(4)
+            u = zeros(4) #No thrust if fuel is zero
       else
-            u = max.(u, 0.0)
+            u = min.(u, params[:Fmax]) #threshold at max thrust
+            u[u .< params[:Fmin]] .= 0.0 #Everything less than min thrust gets set to zero
       end
 
       m = m_dry + m_fuel #total vehicle mass
