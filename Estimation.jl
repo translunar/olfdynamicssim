@@ -6,6 +6,33 @@ estimator_params = (angle_random_walk = 0.06, #in deg/sqrt(hour)
                     accel_bias_instability = 6 #in microG
 )
 
+function trajectory_uncertainty(thist,xhist,uhist,params,vehicle_params)
+    N = length(thist)
+    Δt = thist[2]-thist[1]
+    # Thruster force Jacobian
+    θ_t = 5.0*pi/180 # Thruster angle
+    Bf = [cos(θ_t) 0 -sin(θ_t);
+            cos(θ_t) 0 -sin(θ_t);
+            cos(θ_t) 0 sin(θ_t);
+            cos(θ_t) 0 sin(θ_t)]'
+    m = vehicle_params[:m_dry] + vehicle_params[:m_fuel]
+    Qbb = ((params[:accel_bias_instability]*(9.80665/1e6))^2)/(3600^3)
+    Qgg = ((params[:gyro_bias_instability]*(pi/180))^2)/(3600^3)
+    Qaa = ((params[:velocity_random_walk])^2)/3600
+    Qωω = ((params[:angle_random_walk]*(pi/180))^2)/3600
+    Phist = zeros(15,15,N)
+    P0 = Diagonal([1000; 1000; 1000; .1*pi/180; .1*pi/180; .1*pi/180; .01; .01; .01; 1e-6; 1e-6; 1e-6; 1e-8; 1e-8; 1e-8])
+    Phist[:,:,1] = P0
+    x = zeros(16)
+    for k = 1:(N-1)
+        x = [xhist[1:10,k]; x[11:13]+sqrt(Qbb)*randn(3); x[14:16]+sqrt(Qgg)*randn(3)]
+        u = [(1/m)*Bf*uhist[:,k]+sqrt(Qbb)*randn(3); xhist[11:13,k]+sqrt(Qωω)*randn(3)]
+        xn, Phist[:,:,k+1] = single_step_prediction(x,u,Phist[:,:,k],Δt,params)
+    end
+
+    return Phist
+end
+
 function propagate_state(x0,P0,Δt,tfinal,params)
     N = Int(ceil(tfinal/Δt)+1)
     xhist = zeros(16,N)

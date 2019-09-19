@@ -17,7 +17,7 @@ function closed_loop(params)
       τ_thrust = params[:τ_thrust]
       q_thrust = params[:q_thrust]
       h = τ_thrust*(2^q_thrust)
-      tfinal = 30
+      tfinal = 860
       Nt = Int(tfinal/h)
       Nx = 14
       Nu = 4

@@ -10,7 +10,7 @@ stellar_params = (m_dry=60.0, #dry mass (kg)
                   r_tank=0.5, #fuel tank radius (m)
                   τ_thrust=.05, #minimum valve switching time (s)
                   q_thrust=2, #number of quantization bits for thrusters
-                  cg_offset=[0.01; 0.02; -0.02] #offset to CG (vs nominal)
+                  cg_offset=[0.01; 0.01; -0.01] #offset to CG (vs nominal)
 )
 
 tesseract_params = (m_dry=60.0, #dry mass (kg)
@@ -23,7 +23,7 @@ tesseract_params = (m_dry=60.0, #dry mass (kg)
                   r_tank=0.5, #fuel tank radius (m)
                   τ_thrust=.05, #minimum valve switching time (s)
                   q_thrust=2, #number of quantization bits for thrusters
-                  cg_offset=[0.01; 0.02; -0.02] #offset to CG (vs nominal)
+                  cg_offset=[0.01; 0.01; -0.01] #offset to CG (vs nominal)
 )
 
 function vehicle_dynamics!(ẋ,x,u,params,t)
